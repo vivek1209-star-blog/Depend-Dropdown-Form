@@ -13,9 +13,9 @@ import {
   Backdrop,
   Grid,
   Tooltip,
+  IconButton,
 } from "@mui/material";
-import { Formik, Form, ErrorMessage } from "formik";
-import * as Yup from "yup";
+import CloseIcon from "@mui/icons-material/Close";
 import {
   fetchCountries,
   fetchStates,
@@ -23,14 +23,14 @@ import {
   fetchDistricts,
 } from "./api";
 
-const validationSchema = Yup.object().shape({
-  country: Yup.string().required("Country is required"),
-  state: Yup.string().required("State is required"),
-  district: Yup.string().required("District is required"),
-  city: Yup.string().required("City is required"),
-});
-
 const App = () => {
+  const [formValues, setFormValues] = useState({
+    country: "",
+    state: "",
+    district: "",
+    city: "",
+  });
+  const [formErrors, setFormErrors] = useState({});
   const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -54,17 +54,31 @@ const App = () => {
     getAllCountries();
   }, []);
 
-  const handleChangeCountry = async (event, value, setFieldValue) => {
+  const validateForm = () => {
+    const errors = {};
+    if (!formValues.country) errors.country = "Country is required";
+    if (!formValues.state) errors.state = "State is required";
+    if (!formValues.district) errors.district = "District is required";
+    if (!formValues.city) errors.city = "City is required";
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleChangeCountry = async (event, value) => {
     setLoading(true);
-    setFieldValue("country", value);
+    setFormValues((prevValues) => ({
+      ...prevValues,
+      country: value,
+      state: "",
+      district: "",
+      city: "",
+    }));
+    setFormErrors((prevErrors) => ({ ...prevErrors, country: "" }));
     try {
       const response = await fetchStates(value);
       setStates(response.data.data.states);
       setDistricts([]);
       setCities([]);
-      setFieldValue("state", "");
-      setFieldValue("district", "");
-      setFieldValue("city", "");
       setLoading(false);
     } catch (error) {
       console.error("Failed to fetch states:", error);
@@ -72,15 +86,19 @@ const App = () => {
     }
   };
 
-  const handleChangeState = async (event, value, setFieldValue, country) => {
+  const handleChangeState = async (event, value) => {
     setLoading(true);
-    setFieldValue("state", value);
+    setFormValues((prevValues) => ({
+      ...prevValues,
+      state: value,
+      district: "",
+      city: "",
+    }));
+    setFormErrors((prevErrors) => ({ ...prevErrors, state: "" }));
     try {
-      const response = await fetchDistricts(country, value);
+      const response = await fetchDistricts(formValues.country, value);
       setDistricts(response.data.data);
       setCities([]);
-      setFieldValue("district", "");
-      setFieldValue("city", "");
       setLoading(false);
     } catch (error) {
       console.error("Failed to fetch districts:", error);
@@ -88,19 +106,21 @@ const App = () => {
     }
   };
 
-  const handleChangeDistrict = async (
-    event,
-    value,
-    setFieldValue,
-    country,
-    state
-  ) => {
+  const handleChangeDistrict = async (event, value) => {
     setLoading(true);
-    setFieldValue("district", value);
+    setFormValues((prevValues) => ({
+      ...prevValues,
+      district: value,
+      city: "",
+    }));
+    setFormErrors((prevErrors) => ({ ...prevErrors, district: "" }));
     try {
-      const response = await fetchCities(country, state, value);
+      const response = await fetchCities(
+        formValues.country,
+        formValues.state,
+        value
+      );
       setCities(response.data.data);
-      setFieldValue("city", "");
       setLoading(false);
     } catch (error) {
       console.error("Failed to fetch cities:", error);
@@ -108,23 +128,29 @@ const App = () => {
     }
   };
 
-  const handleSubmit = async (values, { setSubmitting, resetForm }) => {
-    try {
-      console.log(values);
-      setSubmitting(false);
-      setOpen(true); // Open the success dialog
+  const handleChangeCity = (event, value) => {
+    setFormValues((prevValues) => ({
+      ...prevValues,
+      city: value,
+    }));
+    setFormErrors((prevErrors) => ({ ...prevErrors, city: "" }));
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (validateForm()) {
+      console.log(formValues);
+      setOpen(true);
 
       // Reset the form and state
-      resetForm();
+      setFormValues({ country: "", state: "", district: "", city: "" });
       setCountries([]);
       setStates([]);
       setDistricts([]);
       setCities([]);
 
       // Optionally reload countries if needed right after form reset
-      await getAllCountries();
-    } catch (error) {
-      console.error("Failed to submit form:", error);
+      getAllCountries();
     }
   };
 
@@ -166,7 +192,6 @@ const App = () => {
       >
         Sidebar Content
       </Box>
-
       <Container
         component="main"
         sx={{
@@ -178,132 +203,101 @@ const App = () => {
           bgcolor: "grey.100",
         }}
       >
-        <Formik
-          initialValues={{ country: "", state: "", district: "", city: "" }}
-          validationSchema={validationSchema}
-          onSubmit={handleSubmit}
-        >
-          {({ setFieldValue, values, errors, touched }) => (
-            <Form>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Tooltip title="Please select a country first">
-                    <div>
-                      <Autocomplete
-                        options={countries.map((option) => option.name)}
-                        getOptionLabel={(option) => option}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Country"
-                            fullWidth
-                            error={touched.country && Boolean(errors.country)}
-                            helperText={touched.country && errors.country}
-                          />
-                        )}
-                        onChange={(event, value) =>
-                          handleChangeCountry(event, value, setFieldValue)
-                        }
-                      />
-                    </div>
-                  </Tooltip>
-                  <ErrorMessage name="country" component="div" />
-                </Grid>
-                <Grid item xs={12}>
-                  <Tooltip title="Please select a state after selecting a country">
-                    <div>
-                      <Autocomplete
-                        options={states.map((option) => option.name)}
-                        getOptionLabel={(option) => option}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="State"
-                            fullWidth
-                            error={touched.state && Boolean(errors.state)}
-                            helperText={touched.state && errors.state}
-                          />
-                        )}
-                        onChange={(event, value) =>
-                          handleChangeState(
-                            event,
-                            value,
-                            setFieldValue,
-                            values.country
-                          )
-                        }
-                      />
-                    </div>
-                  </Tooltip>
-                  <ErrorMessage name="state" component="div" />
-                </Grid>
-                <Grid item xs={12}>
-                  <Tooltip title="Please select a district after selecting a state">
-                    <div>
-                      <Autocomplete
-                        options={districts}
-                        getOptionLabel={(option) => option}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="District"
-                            fullWidth
-                            error={touched.district && Boolean(errors.district)}
-                            helperText={touched.district && errors.district}
-                          />
-                        )}
-                        onChange={(event, value) =>
-                          handleChangeDistrict(
-                            event,
-                            value,
-                            setFieldValue,
-                            values.country,
-                            values.state
-                          )
-                        }
-                      />
-                    </div>
-                  </Tooltip>
-                  <ErrorMessage name="district" component="div" />
-                </Grid>
-                <Grid item xs={12}>
-                  <Tooltip title="Please select a city after selecting a district">
-                    <div>
-                      <Autocomplete
-                        options={cities}
-                        getOptionLabel={(option) => option}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="City"
-                            fullWidth
-                            error={touched.city && Boolean(errors.city)}
-                            helperText={touched.city && errors.city}
-                          />
-                        )}
-                        onChange={(event, value) =>
-                          setFieldValue("city", value)
-                        }
-                      />
-                    </div>
-                  </Tooltip>
-                  <ErrorMessage name="city" component="div" />
-                </Grid>
-              </Grid>
-              <Button
-                fullWidth
-                type="submit"
-                variant="contained"
-                sx={{ mt: 2 }}
-              >
-                Submit
-              </Button>
-            </Form>
-          )}
-        </Formik>
+        <form onSubmit={handleSubmit}>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Tooltip title="Please select a country first">
+                <Autocomplete
+                  options={countries.map((option) => option.name)}
+                  getOptionLabel={(option) => option}
+                  value={formValues.country}
+                  onChange={handleChangeCountry}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Country"
+                      fullWidth
+                      error={Boolean(formErrors.country)}
+                      helperText={formErrors.country}
+                    />
+                  )}
+                />
+              </Tooltip>
+            </Grid>
+            <Grid item xs={12}>
+              <Tooltip title="Please select a state after selecting a country">
+                <Autocomplete
+                  options={states.map((option) => option.name)}
+                  getOptionLabel={(option) => option}
+                  value={formValues.state}
+                  onChange={handleChangeState}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="State"
+                      fullWidth
+                      error={Boolean(formErrors.state)}
+                      helperText={formErrors.state}
+                    />
+                  )}
+                />
+              </Tooltip>
+            </Grid>
+            <Grid item xs={12}>
+              <Tooltip title="Please select a district after selecting a state">
+                <Autocomplete
+                  options={districts}
+                  getOptionLabel={(option) => option}
+                  value={formValues.district}
+                  onChange={handleChangeDistrict}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="District"
+                      fullWidth
+                      error={Boolean(formErrors.district)}
+                      helperText={formErrors.district}
+                    />
+                  )}
+                />
+              </Tooltip>
+            </Grid>
+            <Grid item xs={12}>
+              <Tooltip title="Please select a city after selecting a district">
+                <Autocomplete
+                  options={cities}
+                  getOptionLabel={(option) => option}
+                  value={formValues.city}
+                  onChange={handleChangeCity}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="City"
+                      fullWidth
+                      error={Boolean(formErrors.city)}
+                      helperText={formErrors.city}
+                    />
+                  )}
+                />
+              </Tooltip>
+            </Grid>
+          </Grid>
+          <Button fullWidth type="submit" variant="contained" sx={{ mt: 2 }}>
+            Submit
+          </Button>
+        </form>
       </Container>
       <Dialog open={open} onClose={() => setOpen(false)}>
-        <DialogTitle>Form submitted successfully!</DialogTitle>
+        <DialogTitle>
+          Form submitted successfully!
+          <IconButton
+            aria-label="close"
+            onClick={() => setOpen(false)}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
         <DialogActions>
           <Button onClick={() => setOpen(false)} color="primary">
             Close
